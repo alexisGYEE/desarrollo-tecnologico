@@ -1,0 +1,63 @@
+import pandas as pd
+import io
+from google.colab import files
+import ipywidgets as widgets
+
+def calcular_generacion_anual(capacidad_kW, carga_kW, datos_meteorologicos):
+    # Asumiendo una eficiencia del sistema del 30%
+    eficiencia_sistema = 0.35
+
+    # Asumiendo pérdidas del 10%
+    perdidas = 0.10
+
+    # Filtrar las horas con luz solar
+    datos_con_luz_solar = datos_meteorologicos[(datos_meteorologicos['DHI'] != 0) | (datos_meteorologicos['DNI'] != 0) | (datos_meteorologicos['GHI'] != 0)]
+
+    # Calcular la generación diaria de energía solo en horas con luz solar
+    datos_con_luz_solar['Generacion_diaria_kWh'] = (datos_con_luz_solar['DHI'] + datos_con_luz_solar['DNI'] + datos_con_luz_solar['GHI']) * carga_kW * eficiencia_sistema * (1 - perdidas) / 1000  # Convertir de W a kWh
+
+    # Calcular la generación anual de energía
+    generacion_anual_kWh = datos_con_luz_solar['Generacion_diaria_kWh'].sum()
+
+    # Calcular la generación anual por kW instalado
+    generacion_anual_por_kW = generacion_anual_kWh / capacidad_kW if capacidad_kW > 0 else 0
+
+    return generacion_anual_kWh, generacion_anual_por_kW
+
+def cargar_datos(change):
+    # Obtener el archivo cargado
+    uploaded_file = next(iter(uploader.value.values()))['content']
+
+    # Leer el archivo CSV
+    datos = pd.read_csv(io.BytesIO(uploaded_file), skiprows=2)  # Saltar las dos primeras filas
+
+    # Realizar el cálculo con los datos cargados
+    capacidad_kW = input_capacidad_kW.value
+    carga_kW = input_carga_kW.value
+    try:
+        generacion_anual_kWh, generacion_anual_por_kW = calcular_generacion_anual(capacidad_kW, carga_kW, datos)
+        # Mostrar el resultado
+        output_resultado.clear_output()
+        with output_resultado:
+            print(f"La generación anual estimada es: {generacion_anual_kWh:.2f} kWh")
+            print(f"La generación anual estimada por cada kW instalado es: {generacion_anual_por_kW:.2f} kWh/kW")
+    except KeyError as e:
+        output_resultado.clear_output()
+        with output_resultado:
+            print(str(e))
+
+# Crear un widget de carga de archivos
+uploader = widgets.FileUpload(accept='.csv', multiple=False)
+uploader.observe(cargar_datos, names='_counter')
+
+# Crear un widget para ingresar la capacidad del sistema en kW
+input_capacidad_kW = widgets.FloatText(description='Capacidad del sistema (kW): ', value=5.0)  # Valor predeterminado
+
+# Crear un widget para ingresar la carga en kW
+input_carga_kW = widgets.FloatText(description='Carga (kW): ', value=5.0)  # Valor predeterminado
+
+# Crear un widget para mostrar el resultado
+output_resultado = widgets.Output()
+
+# Mostrar los widgets
+display(uploader, input_capacidad_kW, input_carga_kW, output_resultado)
